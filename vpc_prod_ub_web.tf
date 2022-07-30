@@ -8,24 +8,24 @@ terraform {
 }
 
 provider "aws" {
-  region = var.region
+  region                  = var.region
   shared_credentials_file = var.creds
-  profile = "ADMIN-TERRAFORM"
+  profile                 = "ADMIN-TERRAFORM"
 }
 
 resource "tls_private_key" "pk" {
-  algorithm = "RSA"
-  rsa_bits  = 4096
+  algorithm   = "RSA"
+  rsa_bits    = 4096
 }
 
 resource "aws_key_pair" "kp" {
-  key_name   = "tf-vpc-prod-sshkey"   # Create pub key to ec2
-  public_key = tls_private_key.pk.public_key_openssh
+  key_name    = "tf-vpc-prod-sshkey"   # Create pub key to ec2
+  public_key  = tls_private_key.pk.public_key_openssh
 }
 
 resource "local_file" "ssh_key" {
-  filename = "${aws_key_pair.kp.key_name}.pem"
-  content = tls_private_key.pk.private_key_pem
+  filename        = "${aws_key_pair.kp.key_name}.pem"
+  content         = tls_private_key.pk.private_key_pem
   file_permission = "0400"
 }
 
@@ -36,13 +36,15 @@ resource "local_file" "ssh_key" {
      Name = "production"
    }
  }
+
  # 2. Create Internet Gateway
  resource "aws_internet_gateway" "gw" {
    vpc_id = aws_vpc.prod-vpc.id
  }
+
  # 3. Create Custom Route Table
  resource "aws_route_table" "prod-route-table" {
-   vpc_id = aws_vpc.prod-vpc.id
+   vpc_id       = aws_vpc.prod-vpc.id
    route {
      cidr_block = "0.0.0.0/0"
      gateway_id = aws_internet_gateway.gw.id
@@ -55,6 +57,7 @@ resource "local_file" "ssh_key" {
      Name = "Prod"
    }
  }
+
  # 4. Create a Subnet 
  resource "aws_subnet" "subnet-1" {
    vpc_id            = aws_vpc.prod-vpc.id
@@ -64,16 +67,18 @@ resource "local_file" "ssh_key" {
      Name = "prod-subnet"
    }
  }
+
  # 5. Associate subnet with Route Table
  resource "aws_route_table_association" "a" {
    subnet_id      = aws_subnet.subnet-1.id
    route_table_id = aws_route_table.prod-route-table.id
  }
+
  # 6. Create Security Group to allow port 22,80,443
  resource "aws_security_group" "allow_web" {
-   name        = "allow_web_traffic"
-   description = "Allow Web inbound traffic"
-   vpc_id      = aws_vpc.prod-vpc.id
+   name          = "allow_web_traffic"
+   description   = "Allow Web inbound traffic"
+   vpc_id        = aws_vpc.prod-vpc.id
    ingress {
      description = "HTTPS"
      from_port   = 443
@@ -102,15 +107,17 @@ resource "local_file" "ssh_key" {
      cidr_blocks = ["0.0.0.0/0"]
    }
    tags = {
-     Name = "allow_web"
+     Name        = "allow_web"
    }
  }
+
  # 7. Create a network interface with an ip in the subnet that was created in step 4
  resource "aws_network_interface" "web-server-nic" {
    subnet_id       = aws_subnet.subnet-1.id
    private_ips     = ["10.0.1.50"]
    security_groups = [aws_security_group.allow_web.id]
  }
+
  # 8. Assign an elastic IP to the network interface created in step 7
  resource "aws_eip" "one" {
    vpc                       = true
@@ -123,10 +130,10 @@ resource "local_file" "ssh_key" {
  }
  # 9. Create Ubuntu server and install/enable apache2
  resource "aws_instance" "web-server-instance" {
-   ami               = "ami-0fb391cce7a602d1f"
-   instance_type     = "t2.micro"
-   availability_zone = "eu-west-2a"
-   key_name = aws_key_pair.kp.key_name
+   ami                    = "ami-0fb391cce7a602d1f"
+   instance_type          = "t2.micro"
+   availability_zone      = "eu-west-2a"
+   key_name               = aws_key_pair.kp.key_name
    network_interface {
      device_index         = 0
      network_interface_id = aws_network_interface.web-server-nic.id
